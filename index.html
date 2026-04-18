@@ -10,41 +10,83 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #ffffff; /* 🔥 todo blanco */
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
   overflow: hidden;
+  font-family: Arial, sans-serif;
+  background: #ffffff;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
 }
 
 header {
   background: #003A8F;
   color: white;
-  padding: 15px;
+  padding: 10px;
   text-align: center;
+  flex-shrink: 0;
 }
 
+header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.bienvenida {
+  text-align: center;
+  padding: 8px 20px;
+  color: #003A8F;
+  font-size: 14px;
+  max-width: 1100px;
+  margin: 0 auto;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
+/* 🔥 MENÚ FLEXIBLE */
 .menu {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   padding: 10px;
+  flex-shrink: 0;
 }
 
 .menu a {
   text-decoration: none;
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: #003A8F;
   color: white;
-  border-radius: 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  transition: transform 0.2s;
 }
 
+.menu a:hover {
+  background: #00265e;
+  transform: scale(1.05);
+}
+
+/* 🔥 CARRUSEL DINÁMICO REAL */
 .carousel {
-  width: 100%;
-  height: calc(100vh - 140px);
+  flex: 1;
+  /* CORRECCIÓN: Permite que el contenedor se encoja si el menú ocupa más espacio */
+  min-height: 0; 
   position: relative;
-  background: white; /* 🔥 quitamos negro */
+  background: white;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .slide {
@@ -52,7 +94,7 @@ header {
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 1s;
+  transition: opacity 0.8s ease-in-out;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -63,20 +105,15 @@ header {
 }
 
 .slide img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  background: white; /* 🔥 evita franjas negras */
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* 🔥 ajusta automáticamente sin deformar */
 }
 
 /* loader */
 .loader {
   color: #003A8F;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 20px;
+  font-size: 16px;
 }
 </style>
 </head>
@@ -87,87 +124,99 @@ header {
   <h1>Hyundai Coatza</h1>
 </header>
 
+<div class="bienvenida" id="mensaje">
+  Cargando herramientas...
+</div>
+
 <div class="menu" id="menu"></div>
 
 <div class="carousel" id="carousel">
-  <div class="loader">Cargando imágenes...</div>
+  <div class="loader">Actualizando galería...</div>
 </div>
 
 <script>
-
-const API = "https://script.google.com/macros/s/AKfycbx4mvQBt0US3Ywh0UpiBSc-hrpky8WdjbMLJ24bgM1iOBBzDrh-6P5ij8J_nhD6d0kgdA/exec";
+// CORRECCIÓN: URL actualizada de la API (Apps Script)
+const API = "https://script.google.com/macros/s/AKfycbxg4j7SZA1755E81dkT3ZAF-1swDrmPsrbjVJQosripVnxI2_WbXKR_2y7aNYtRRQpTdA/exec";
 
 let current = 0;
 let slides = [];
 
-// CACHE
+/* CACHE SOLO PARA CARRUSEL */
 function cacheSet(key, data) {
-  localStorage.setItem(key, JSON.stringify({
-    time: Date.now(),
-    data: data
-  }));
+  localStorage.setItem(key, JSON.stringify({time: Date.now(), data}));
 }
 
-function cacheGet(key, minutes = 5) {
+function cacheGet(key, mins = 2) {
   const cache = localStorage.getItem(key);
   if (!cache) return null;
-
   const obj = JSON.parse(cache);
-  const diff = (Date.now() - obj.time) / 60000;
-
-  if (diff > minutes) return null;
-
+  if ((Date.now() - obj.time) / 60000 > mins) return null;
   return obj.data;
 }
 
-// DRIVE
+/* DRIVE */
 function convertirDrive(url) {
   if (!url) return "";
   const match = url.match(/(?:id=|\/d\/)([-\w]{25,})/);
   if (match && match[1]) {
-    return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1200`;
   }
   return url;
 }
 
-// MENÚ
-async function cargarMenu() {
-
-  let data = cacheGet("menu");
-
-  if (!data) {
-    const res = await fetch(API + "?action=getWeb");
-    data = await res.json();
-    cacheSet("menu", data);
+/* MENSAJE */
+async function cargarMensaje() {
+  try {
+    const res = await fetch(API + "?action=getConfig&nocache=" + Date.now());
+    const data = await res.json();
+    document.getElementById("mensaje").textContent =
+      data.mensaje || "Bienvenidos equipo";
+  } catch (e) {
+    console.error(e);
   }
-
-  const menu = document.getElementById("menu");
-  menu.innerHTML = "";
-
-  data.forEach(item => {
-    const a = document.createElement("a");
-    a.href = item.url;
-    a.textContent = item.nombre;
-    a.target = "_blank";
-    menu.appendChild(a);
-  });
 }
 
-// CARRUSEL
+/* 🔥 MENÚ SIN CACHE */
+async function cargarMenu() {
+  try {
+    const res = await fetch(API + "?action=getWeb&nocache=" + Date.now());
+    const data = await res.json();
+
+    const menu = document.getElementById("menu");
+    menu.innerHTML = "";
+
+    data.forEach(item => {
+      if (item.nombre && item.url) {
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.textContent = item.nombre;
+        a.target = "_blank";
+        menu.appendChild(a);
+      }
+    });
+
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+/* CARRUSEL */
 async function cargarCarrusel() {
 
   let data = cacheGet("carrusel");
 
   if (!data) {
-    const res = await fetch(API + "?action=getCarrusel");
-    data = await res.json();
-    cacheSet("carrusel", data);
+    try {
+      const res = await fetch(API + "?action=getCarrusel");
+      data = await res.json();
+      cacheSet("carrusel", data);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   const container = document.getElementById("carousel");
-  container.innerHTML = '<div class="loader">Cargando imágenes...</div>';
-
-  let loaded = 0;
+  container.innerHTML = "";
 
   data.forEach((item, i) => {
 
@@ -178,15 +227,8 @@ async function cargarCarrusel() {
     const img = document.createElement("img");
     img.src = convertirDrive(item.url);
 
-    img.onload = () => {
-      loaded++;
-      if (loaded === 1) {
-        document.querySelector(".loader")?.remove();
-      }
-    };
-
     img.onerror = () => {
-      img.src = "https://via.placeholder.com/800x400?text=Error+imagen";
+      img.src = "https://via.placeholder.com/800x400?text=Imagen+no+disponible";
     };
 
     div.appendChild(img);
@@ -196,15 +238,18 @@ async function cargarCarrusel() {
   slides = document.querySelectorAll(".slide");
 
   if (slides.length > 0) {
-    setInterval(() => {
+    if (window.carruselInterval) clearInterval(window.carruselInterval);
+
+    window.carruselInterval = setInterval(() => {
       slides[current].classList.remove("active");
       current = (current + 1) % slides.length;
       slides[current].classList.add("active");
-    }, 4000);
+    }, 4500);
   }
 }
 
-// INIT
+/* INIT */
+cargarMensaje();
 cargarMenu();
 cargarCarrusel();
 
